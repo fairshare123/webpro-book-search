@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book Search App | Dipika Aryal</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f0fdfa;color:#23413e;line-height:1.6}
+header,footer{background:white;padding:18px 7%;border-bottom:1px solid #d5eeea}
+a{color:#0f766e;text-decoration:none;font-weight:bold}main{width:92%;max-width:1100px;margin:35px auto}
+.tag{background:#ccfbf1;color:#134e4a;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:bold}
+h1,h2,h3{color:#134e4a}.intro,.message{color:#647875}
+.card{background:white;border:1px solid #d5eeea;border-radius:16px;padding:24px;margin-top:25px}
+.filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+label{display:block;font-size:14px;font-weight:bold;margin-bottom:5px}
+input,select{width:100%;min-width:0;padding:11px;border:1px solid #bddbd6;border-radius:9px;font:inherit;background:white}
+button{padding:10px 14px;border:0;border-radius:9px;background:#0f766e;color:white;font-weight:bold;cursor:pointer}
+button:hover{background:#134e4a}button:disabled{opacity:.5;cursor:not-allowed}
+.secondary{background:#ccfbf1;color:#134e4a}.secondary:hover{background:#5eead4;color:#134e4a}
+.results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.book{display:flex;gap:14px;padding:16px;background:#f0fdfa;border:1px solid #d5eeea;border-radius:12px;min-width:0}
+.cover{width:90px;height:135px;object-fit:cover;flex-shrink:0;background:#ccfbf1}
+.book h3{margin:0 0 5px;overflow-wrap:anywhere}.book p{font-size:14px;margin:5px 0;overflow-wrap:anywhere}
+.details{margin-top:10px;padding:12px;background:white;border-radius:9px;border:1px solid #d5eeea;font-size:14px}
+.controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
+.pagination{display:flex;gap:8px}.back{display:inline-block;margin:25px 0}
+footer{text-align:center;color:#647875;border-top:1px solid #d5eeea}
+@media(max-width:700px){.filters,.results{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><a href="https://fairshare123.github.io/Web_program_week2/">← My Web Programming Portfolio</a></header>
+<main>
+<span class="tag">BOOK SEARCH APP</span>
+<h1>Advanced Book Search</h1>
+<p class="intro">
+    Search the Open Library catalog using multiple filters, sort results,
+    move between result pages, and retrieve additional information about books.
+</p>
+
+<section class="card">
+<form id="searchForm">
+    <div class="filters">
+        <div>
+            <label for="titleInput">Title</label>
+            <input id="titleInput" type="search" placeholder="Book title">
+        </div>
+        <div>
+            <label for="authorInput">Author</label>
+            <input id="authorInput" type="search" placeholder="Author name">
+        </div>
+        <div>
+            <label for="subjectInput">Subject or topic</label>
+            <input id="subjectInput" type="search" placeholder="e.g. science fiction">
+        </div>
+        <div>
+            <label for="yearInput">First publication year</label>
+            <input id="yearInput" type="number" min="1" max="2026" placeholder="Optional">
+        </div>
+        <div>
+            <label for="sortSelect">Sort results</label>
+            <select id="sortSelect">
+                <option value="relevance">Relevance</option>
+                <option value="title">Title A–Z</option>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="searchButton" type="submit">Search Books</button>
+        <button class="secondary" id="clearButton" type="button">Clear Filters</button>
+    </div>
+</form>
+
+<div class="controls">
+    <p id="status" class="message" aria-live="polite">Enter at least one search term.</p>
+    <span id="pageInfo" class="message"></span>
+</div>
+
+<div id="results" class="results"></div>
+
+<div class="controls">
+    <span id="resultCount" class="message"></span>
+    <div class="pagination">
+        <button id="previousButton" type="button" disabled>← Previous</button>
+        <button id="nextButton" type="button" disabled>Next →</button>
+    </div>
+</div>
+</section>
+
+<a class="back" href="https://fairshare123.github.io/Web_program_week2/">← Back to Portfolio</a>
+</main>
+<footer>Book Search App · Dipika Aryal · Web Programming</footer>
+
+<script>
+const form = document.getElementById("searchForm");
+const titleInput = document.getElementById("titleInput");
+const authorInput = document.getElementById("authorInput");
+const subjectInput = document.getElementById("subjectInput");
+const yearInput = document.getElementById("yearInput");
+const sortSelect = document.getElementById("sortSelect");
+const searchButton = document.getElementById("searchButton");
+const clearButton = document.getElementById("clearButton");
+const previousButton = document.getElementById("previousButton");
+const nextButton = document.getElementById("nextButton");
+const results = document.getElementById("results");
+const status = document.getElementById("status");
+const pageInfo = document.getElementById("pageInfo");
+const resultCount = document.getElementById("resultCount");
+
+const pageSize = 10;
+let currentPage = 1;
+let totalResults = 0;
+let currentBooks = [];
+
+form.addEventListener("submit", function(event) {
+    event.preventDefault();
+
+    currentPage = 1;
+    searchBooks();
+});
+
+clearButton.addEventListener("click", function() {
+    form.reset();
+    currentPage = 1;
+    totalResults = 0;
+    currentBooks = [];
+    results.replaceChildren();
+    status.textContent = "Filters cleared. Enter a search term.";
+    pageInfo.textContent = "";
+    resultCount.textContent = "";
+    previousButton.disabled = true;
+    nextButton.disabled = true;
+});
+
+previousButton.addEventListener("click", function() {
+    if (currentPage > 1) {
+        currentPage--;
+        searchBooks();
+    }
+});
+
+nextButton.addEventListener("click", function() {
+    if (currentPage * pageSize < totalResults) {
+        currentPage++;
+        searchBooks();
+    }
+});
+
+sortSelect.addEventListener("change", renderBooks);
+
+
+async function searchBooks() {
+    const title = titleInput.value.trim();
+    const author = authorInput.value.trim();
+    const subject = subjectInput.value.trim();
+    const yearText = yearInput.value.trim();
+
+    if (!title && !author && !subject) {
+        status.textContent = "Enter a title, author, or subject to search.";
+        results.replaceChildren();
+        resultCount.textContent = "";
+        return;
+    }
+
+    if (yearText &&
+        (!Number.isInteger(Number(yearText)) ||
+         Number(yearText) < 1 ||
+         Number(yearText) > 2026)) {
+        status.textContent = "Please enter a valid publication year.";
+        return;
+    }
+
+    status.textContent = "Searching the Open Library catalog...";
+    results.replaceChildren();
+    searchButton.disabled = true;
+    previousButton.disabled = true;
+    nextButton.disabled = true;
+
+    try {
+        const params = new URLSearchParams({
+            limit: String(pageSize),
+            offset: String((currentPage - 1) * pageSize),
+            fields: "key,title,author_name,first_publish_year,cover_i,subject"
+        });
+
+        if (title) params.set("title", title);
+        if (author) params.set("author", author);
+        if (subject) params.set("subject", subject);
+        if (yearText) params.set("first_publish_year", yearText);
+
+        const response = await fetch(
+            "https://openlibrary.org/search.json?" + params.toString()
+        );
+
+        if (!response.ok) {
+            throw new Error("Open Library returned an error.");
+        }
+
+        const data = await response.json();
+        currentBooks = data.docs || [];
+        totalResults = data.numFound || 0;
+
+        if (currentBooks.length === 0) {
+            status.textContent = "No books found. Try changing your filters.";
+            pageInfo.textContent = "";
+            resultCount.textContent = "0 results";
+            return;
+        }
+
+        status.textContent = "Search completed.";
+        renderBooks();
+
+    } catch (error) {
+        status.textContent =
+            "We couldn't retrieve the books. Check your connection and try again.";
+        pageInfo.textContent = "";
+        resultCount.textContent = "";
+
+    } finally {
+        searchButton.disabled = false;
+        previousButton.disabled = currentPage <= 1;
+        nextButton.disabled = currentPage * pageSize >= totalResults;
+    }
+}
+
+
+function renderBooks() {
+    const books = [...currentBooks];
+    const sort = sortSelect.value;
+
+    if (sort === "title") {
+        books.sort((a, b) =>
+            (a.title || "").localeCompare(b.title || "")
+        );
+    } else if (sort === "newest") {
+        books.sort((a, b) =>
+            (b.first_publish_year || 0) - (a.first_publish_year || 0)
+        );
+    } else if (sort === "oldest") {
+        books.sort((a, b) =>
+            (a.first_publish_year || 99999) - (b.first_publish_year || 99999)
+        );
+    }
+
+    results.replaceChildren();
+
+    books.forEach(function(book) {
+        const card = document.createElement("article");
+        card.className = "book";
+
+        if (book.cover_i) {
+            const cover = document.createElement("img");
+            cover.className = "cover";
+            cover.alt = "Book cover";
+            cover.loading = "lazy";
+            cover.src =
+                `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`;
+            card.appendChild(cover);
+        }
+
+        const info = document.createElement("div");
+        const title = document.createElement("h3");
+        title.textContent = book.title || "Untitled";
+
+        const author = document.createElement("p");
+        author.textContent =
+            "Author: " + (book.author_name?.slice(0, 3).join(", ") || "Unknown");
+
+        const year = document.createElement("p");
+        year.textContent = "First published: " +
+            (book.first_publish_year || "Unknown");
+
+        const detailsButton = document.createElement("button");
+        detailsButton.type = "button";
+        detailsButton.textContent = "More Details";
+        detailsButton.addEventListener("click", function() {
+            showBookDetails(book, info, detailsButton);
+        });
+
+        info.append(title, author, year, detailsButton);
+        card.appendChild(info);
+        results.appendChild(card);
+    });
+
+    pageInfo.textContent = `Page ${currentPage}`;
+    resultCount.textContent =
+        `About ${totalResults.toLocaleString()} results`;
+
+    previousButton.disabled = currentPage <= 1;
+    nextButton.disabled = currentPage * pageSize >= totalResults;
+}
+
+
+async function showBookDetails(book, container, button) {
+    const oldDetails = container.querySelector(".details");
+
+    if (oldDetails) {
+        oldDetails.remove();
+        button.textContent = "More Details";
+        return;
+    }
+
+    if (!book.key || !book.key.startsWith("/works/")) {
+        button.textContent = "Details unavailable";
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Loading details...";
+
+    const detailsBox = document.createElement("div");
+    detailsBox.className = "details";
+    detailsBox.textContent = "Loading book details...";
+    container.appendChild(detailsBox);
+
+    try {
+        const response = await fetch(
+            "https://openlibrary.org" + book.key + ".json"
+        );
+
+        if (!response.ok) {
+            throw new Error("Could not load book details.");
+        }
+
+        const data = await response.json();
+        let description = data.description || "No description is available.";
+
+        if (typeof description === "object") {
+            description = description.value || "No description is available.";
+        }
+
+        const subjects = (book.subject || []).slice(0, 5).join(", ");
+
+        detailsBox.textContent =
+            description + (subjects ? ` Subjects: ${subjects}.` : "");
+
+        button.textContent = "Hide Details";
+
+    } catch (error) {
+        detailsBox.textContent = "Details could not be loaded right now.";
+        button.textContent = "Try Details Again";
+
+    } finally {
+        button.disabled = false;
+    }
+}
+</script>
+</body>
+</html>
